@@ -1,0 +1,113 @@
+name: Build Microcosm VST
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: Linux
+            vst3-path: build/Microcosm_artefacts/VST3/Microcosm.vst3
+            standalone-path: build/Microcosm_artefacts/Standalone/Microcosm
+          - os: macos-latest
+            name: macOS
+            vst3-path: build/Microcosm_artefacts/VST3/Microcosm.vst3
+            au-path: build/Microcosm_artefacts/AU/Microcosm.component
+            standalone-path: build/Microcosm_artefacts/Standalone/Microcosm.app
+          - os: windows-latest
+            name: Windows
+            vst3-path: build/Microcosm_artefacts/VST3/Microcosm.vst3
+            standalone-path: build/Microcosm_artefacts/Standalone/Microcosm.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libasound2-dev libjack-jackd2-dev ladspa-sdk libcurl4-openssl-dev libfreetype6-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libwebkit2gtk-4.0-dev libglu1-mesa-dev mesa-common-dev
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: cmake --build build --config Release --parallel 4
+
+    - name: Package VST3 (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        cd build/Microcosm_artefacts/VST3
+        zip -r ../../../Microcosm-Linux-VST3.zip Microcosm.vst3
+        cd ../../..
+        cd build/Microcosm_artefacts/Standalone
+        zip -r ../../../Microcosm-Linux-Standalone.zip Microcosm
+        cd ../../..
+
+    - name: Package VST3 (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        cd build/Microcosm_artefacts/VST3
+        zip -r ../../../Microcosm-macOS-VST3.zip Microcosm.vst3
+        cd ../../..
+        cd build/Microcosm_artefacts/AU
+        zip -r ../../../Microcosm-macOS-AU.zip Microcosm.component
+        cd ../../..
+        cd build/Microcosm_artefacts/Standalone
+        zip -r ../../../Microcosm-macOS-Standalone.zip Microcosm.app
+        cd ../../..
+
+    - name: Package VST3 (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        cd build\Microcosm_artefacts\VST3
+        7z a ..\..\..\Microcosm-Windows-VST3.zip Microcosm.vst3
+        cd ..\..\..
+        cd build\Microcosm_artefacts\Standalone\Release
+        7z a ..\..\..\..\Microcosm-Windows-Standalone.zip Microcosm.exe
+        cd ..\..\..\..
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Microcosm-${{ matrix.name }}
+        path: |
+          Microcosm-*-VST3.zip
+          Microcosm-*-AU.zip
+          Microcosm-*-Standalone.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          Microcosm-Linux/**/*.zip
+          Microcosm-macOS/**/*.zip
+          Microcosm-Windows/**/*.zip
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
