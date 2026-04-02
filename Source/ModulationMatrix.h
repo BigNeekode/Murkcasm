@@ -3,6 +3,8 @@
 #include "ModulationSystem.h"
 #include <functional>
 #include <memory>
+#include <map>
+#include <vector>
 
 // ============================================
 // MODULATABLE PARAMETER - Wraps a parameter to accept modulation
